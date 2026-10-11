@@ -1,0 +1,37 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OMNIA Admin</title><style>
+body{margin:0;background:#0e0f14;color:#eceef4;font:14px/1.5 system-ui,sans-serif;padding:12px}
+button,input,select,textarea{font:inherit;color:inherit;background:#181a22;border:1px solid #2a2f3d;border-radius:8px;padding:6px 10px}
+nav{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}nav button.on{background:#4cc9f0;color:#0e0f14}
+.c{background:#181a22;border:1px solid #262a36;border-radius:12px;padding:10px;margin:8px 0}
+.g{display:grid;grid-template-columns:1fr 1fr;gap:8px}.g .c{margin:0}.g b{font-size:22px;display:block}
+.r{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px}small{color:#8a90a2}.bad{color:#ff6b6b}
+pre{white-space:pre-wrap;margin:4px 0;overflow-wrap:anywhere}
+</style></head><body><h3>OMNIA Admin</h3><nav id="n"></nav><div id="v"></div><script>
+const $=s=>document.querySelector(s),pw=sessionStorage.getItem('ap');if(!pw)location.href='/';
+const api=(a,b)=>fetch('/api/app?a='+a,{method:'POST',headers:{'Content-Type':'application/json','x-admin':pw},body:JSON.stringify(b||{})}).then(r=>{if(r.status===401){sessionStorage.removeItem('ap');alert('Wrong password');location.href='/'}return r.json()});
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const T={dash:'Dashboard',users:'Users',chats:'Chats',ads:'Ads',set:'Settings',hg:'HeyGen IDs'};
+let tab='dash',uf='',kf='',q='',cfg={},ads=[],LS=[];
+const cp=e=>{navigator.clipboard.writeText(e.dataset.id);e.style.color='#5fd08a';e.title='copied'},go=k=>{tab=k;show()},setK=async(k,v)=>{await api('set',{k,v});alert('Saved')};
+const blk=async(u,b)=>{await api('block',{uid:u,blocked:b});show()};
+const wipe=async u=>{if(confirm('Delete all chats of this user?')){await api('wipe',{uid:u});show()}};
+const chatsOf=u=>{uf=u;kf='';q='';go('chats')};
+const flt=()=>{uf=$('#fu').value.trim();kf=$('#fk').value;q=$('#fq').value.trim();show()};
+const csv=()=>{const e=s=>'"'+String(s??'').replace(/"/g,'""')+'"';const t=['time,user,kind,prompt,reply',...LS.map(l=>[l.ts,l.uid,l.kind,l.prompt,l.reply].map(e).join(','))].join('\n'),a=document.createElement('a');a.href=URL.createObjectURL(new Blob([t],{type:'text/csv'}));a.download='chats.csv';a.click()};
+function drawAds(){$('#v').innerHTML=`<div class="c"><b>Announcement bar</b><br><textarea id="an" style="width:100%">${esc(cfg.announce||'')}</textarea><button onclick="setK('announce',$('#an').value)">Save announcement</button></div><b>Ads</b>`+ads.map((a,i)=>`<div class="c"><input value="${esc(a.t)}" placeholder="Ad text" style="width:100%" oninput="ads[${i}].t=this.value"><input value="${esc(a.l)}" placeholder="Link (https://...)" style="width:100%;margin-top:6px" oninput="ads[${i}].l=this.value"><div class="r"><label><input type="checkbox" ${a.on?'checked':''} onchange="ads[${i}].on=this.checked"> Live</label><button onclick="ads.splice(${i},1);drawAds()">Remove</button></div></div>`).join('')+`<div class="r"><button onclick="ads.push({t:'',l:'',on:true});drawAds()">Add ad</button><button onclick="setK('ads',ads)">Save ads</button></div>`}
+async function saveSet(){const off={};document.querySelectorAll('.sc').forEach(c=>off[c.value]=!c.checked);await Promise.all([api('set',{k:'maintenance',v:$('#mt').checked}),api('set',{k:'limit',v:+$('#lm').value||0}),api('set',{k:'off',v:off}),api('set',{k:'discord',v:$('#dl').value.trim()}),api('set',{k:'name',v:$('#nm').value.trim()})]);alert('Saved')}
+async function show(){
+  $('#n').innerHTML=Object.entries(T).map(([k,v])=>`<button class="${k===tab?'on':''}" onclick="go('${k}')">${v}</button>`).join('');const v=$('#v');
+  if(tab==='dash'){const s=await api('stats');v.innerHTML=`<div class="g">${[['Users',s.users],['Active now',s.active],['Blocked',s.blocked],['Messages',s.logs],...Object.entries(s.kinds||{})].map(([a,b])=>`<div class="c"><b>${b}</b>${esc(a)}</div>`).join('')}</div><div class="r"><button onclick="show()">Refresh</button></div>`}
+  else if(tab==='users'){const us=await api('users');v.innerHTML=`<input id="sq" placeholder="Search name or ID" style="width:100%">`+us.map(u=>`<div class="c row"><b>${esc(u.name)}</b> <small>${u.uid}</small> ${u.blocked?'<span class="bad">blocked</span>':''}<br><small>${esc(u.city)} ${esc(u.country)} · ${new Date(u.last_seen).toLocaleString()} · ${u.n} requests</small><div class="r"><button onclick="blk('${u.uid}',${!u.blocked})">${u.blocked?'Unblock':'Block'}</button><button onclick="chatsOf('${u.uid}')">Chats</button><button onclick="wipe('${u.uid}')">Delete chats</button></div></div>`).join('');
+    $('#sq').oninput=e=>document.querySelectorAll('.row').forEach(r=>r.style.display=r.textContent.toLowerCase().includes(e.target.value.toLowerCase())?'':'none')}
+  else if(tab==='chats'){const[us,ls]=await Promise.all([api('users'),api('logs',{uid:uf,kind:kf,q})]),M={};us.forEach(u=>M[u.uid]=u.name);LS=ls;
+    v.innerHTML=`<div class="r"><input id="fu" placeholder="User ID" value="${esc(uf)}"><select id="fk">${['','chat','code','image','video'].map(k=>`<option value="${k}" ${k===kf?'selected':''}>${k||'All types'}</option>`).join('')}</select><input id="fq" placeholder="Keyword" value="${esc(q)}"><button onclick="flt()">Search</button><button onclick="csv()">Export CSV</button></div>`+ls.map(l=>`<div class="c"><small>${new Date(l.ts).toLocaleString()} · ${esc(M[l.uid]||'?')} · ${l.uid} · ${l.kind}</small><pre><b>User:</b> ${esc(l.prompt)}</pre><pre><b>AI:</b> ${esc((l.reply||'').slice(0,500))}</pre></div>`).join('')}
+  else if(tab==='ads'){cfg=await api('config');ads=cfg.ads||[];drawAds()}
+  else if(tab==='hg'){const d=await api('hg');const row=(n,sub,id,img)=>`<div class="c hr">${img&&/^https:/.test(img)?`<img src="${esc(img)}" width="70" loading="lazy" style="float:right;border-radius:8px">`:''}<b>${esc(n)}</b> <small>${esc(sub)}</small><br><code data-id="${esc(id)}" onclick="cp(this)" style="word-break:break-all">${esc(id)}</code></div>`;
+    v.innerHTML=`<input id="hq" placeholder="Search name, language, gender" style="width:100%"><p><small>Tap an ID to copy it.</small></p>${d.error?`<p class="bad">${esc(d.error)}</p>`:''}<b>Avatars</b>`+(d.avatars||[]).map(a=>row(a.name,a.gender,a.id,a.img)).join('')+`<br><b>Voices</b>`+(d.voices||[]).map(x=>row(x.name,(x.lang||'')+' · '+(x.gender||''),x.id)).join('');
+    $('#hq').oninput=e=>document.querySelectorAll('.hr').forEach(r=>r.style.display=r.textContent.toLowerCase().includes(e.target.value.toLowerCase())?'':'none')}
+  else{cfg=await api('config');const off=cfg.off||{};v.innerHTML=`<div class="c"><label><input type="checkbox" id="mt" ${cfg.maintenance?'checked':''}> Maintenance mode</label></div><div class="c">Daily limit per user (0 = no limit)<br><input id="lm" type="number" value="${cfg.limit||0}"></div><div class="c">Sections on<div class="r">${['chat','code','image','video'].map(k=>`<label><input type="checkbox" class="sc" value="${k}" ${off[k]?'':'checked'}> ${k}</label>`).join('')}</div></div><div class="c">Discord link<br><input id="dl" value="${esc(cfg.discord||'')}" style="width:100%"><br>App name<br><input id="nm" value="${esc(cfg.name||'OMNIA AI')}" style="width:100%"></div><button onclick="saveSet()">Save settings</button>`}
+}
+show();setInterval(()=>tab==='dash'&&show(),15000);
+</script></body></html>

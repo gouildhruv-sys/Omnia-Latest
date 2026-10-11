@@ -1,0 +1,71 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>OMNIA AI</title><style>
+:root{--bg:#0e0f14;--cd:#181a22;--tx:#eceef4;--mu:#8a90a2;--ac:#4cc9f0;--bd:#262a36}
+[data-t=light]{--bg:#f6f7fb;--cd:#fff;--tx:#14161c;--mu:#667085;--ac:#4f46e5;--bd:#e3e6ee}
+[data-t=dusk]{--bg:#1b1226;--cd:#27193a;--tx:#f6ecff;--mu:#b39ccc;--ac:#ff8a5c;--bd:#3a2754}
+*{box-sizing:border-box}html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,sans-serif;display:flex;flex-direction:column;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+button{font:inherit;color:inherit;background:var(--cd);border:1px solid var(--bd);border-radius:10px;padding:6px 11px;cursor:pointer}
+header{display:flex;align-items:center;gap:8px;padding:10px 12px}header b{flex:1;font-size:18px}
+#an,#ad{display:none;margin:0 12px 6px;padding:8px 12px;border-radius:10px;font-size:13px}
+#an{background:var(--ac);color:var(--bg)}#ad{background:var(--cd);border:1px dashed var(--ac);color:var(--tx);text-decoration:none}
+nav{display:flex;gap:6px;padding:0 12px 8px;overflow-x:auto}nav button.on{background:var(--ac);color:var(--bg);border-color:var(--ac)}
+#msgs{flex:1;overflow-y:auto;padding:4px 12px}
+.m{max-width:92%;margin:8px 0;padding:9px 30px 9px 12px;border-radius:14px;background:var(--cd);border:1px solid var(--bd);position:relative;overflow-wrap:anywhere}
+.m.u{margin-left:auto;background:var(--ac);color:var(--bg);border-color:var(--ac);padding-right:12px}
+.m img,.m video{max-width:100%;border-radius:10px;display:block;margin-bottom:6px}
+pre{background:#0007;color:#e8e8e8;padding:10px;border-radius:8px;overflow-x:auto;font-size:13px;margin:6px 0}
+.sv{position:absolute;right:2px;top:2px;border:0;background:none;padding:2px 6px;color:var(--mu)}
+.em{color:var(--mu);text-align:center;margin-top:28vh}
+form{display:flex;gap:8px;padding:8px 12px 12px}
+textarea{flex:1;resize:none;height:44px;border-radius:12px;border:1px solid var(--bd);background:var(--cd);color:var(--tx);padding:10px;font:inherit}
+#go{background:var(--ac);color:var(--bg);border-color:var(--ac);font-weight:600}
+#dr{position:fixed;inset:0 25% 0 0;background:var(--bg);border-right:1px solid var(--bd);padding:16px;overflow-y:auto;transform:translateX(-101%);transition:transform .2s;z-index:5}
+#dr.o{transform:none}#dr h4{margin:14px 0 6px;color:var(--mu)}#dr p{margin:4px 0;padding:6px 8px;border:1px solid var(--bd);border-radius:8px;font-size:13px;cursor:pointer}
+</style></head><body>
+<header><button id="mn">☰</button><svg width="26" height="26" viewBox="0 0 26 26"><circle cx="13" cy="13" r="10" fill="none" stroke="var(--ac)" stroke-width="3"/><circle cx="13" cy="13" r="3.5" fill="var(--ac)"/></svg><b id="nm">OMNIA AI</b><button id="dc">Discord</button><button id="th">◐</button><button id="sd">🔊</button></header>
+<div id="an"></div><a id="ad" target="_blank" rel="noopener"></a>
+<nav id="tb"></nav><div id="msgs"></div>
+<form id="f"><textarea id="in"></textarea><button id="go">Send</button></form><div id="dr"></div>
+<script>
+const $=s=>document.querySelector(s),L=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},S=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch{}};
+const SEC={chat:'Chat',code:'Code',image:'Image',video:'Video'},EM={chat:'Ask anything.',code:'Describe the code you need.',image:'Describe the image to create.',video:'Type what your avatar should say.'};
+let uid=L('uid',0);if(!uid){uid='g'+Math.random().toString(36).slice(2,10)+Date.now().toString(36);S('uid',uid)}
+let name=L('name','Guest'),sec='chat',hist=L('hist',{chat:[],code:[],image:[],video:[]}),recent=L('recent',[]),saved=L('saved',[]),snd=L('snd',1),th=L('th','dark'),cfg={},busy=0;
+const esc=s=>String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const fmt=t=>String(t??'').split('```').map((p,i)=>i%2?'<pre>'+esc(p.replace(/^\w*\n/,''))+'</pre>':esc(p).replace(/\n/g,'<br>')).join('');
+const api=(a,b)=>fetch('/api/app?a='+a,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b||{})}).then(r=>r.json());
+const beep=f=>{if(!snd)return;try{const c=new(window.AudioContext||window.webkitAudioContext)(),o=c.createOscillator(),g=c.createGain();o.frequency.value=f;g.gain.value=.05;o.connect(g);g.connect(c.destination);o.start();o.stop(c.currentTime+.08)}catch{}};
+const save=()=>{try{localStorage.setItem('hist',JSON.stringify(hist,(k,v)=>k==='img'?undefined:v))}catch{}S('recent',recent);S('saved',saved)};
+function tabs(){$('#tb').innerHTML=Object.keys(SEC).filter(k=>!(cfg.off&&cfg.off[k])).map(k=>`<button data-s="${k}" class="${k===sec?'on':''}">${SEC[k]}</button>`).join('')}
+function setSec(k){sec=k;tabs();$('#in').placeholder=EM[k];draw();beep(520)}
+function draw(){const m=$('#msgs');m.innerHTML=hist[sec].map((x,i)=>`<div class="m ${x.r}">${x.img?`<img src="${x.img}">`:''}${x.url?`<video controls playsinline src="${x.url}"></video>`:''}<div>${fmt(x.t)}</div>${x.r==='m'?`<button class="sv" data-i="${i}">☆</button>`:''}</div>`).join('')||`<p class="em">${EM[sec]}</p>`;m.scrollTop=m.scrollHeight}
+async function pollV(w,id){for(let i=0;i<60;i++){await new Promise(r=>setTimeout(r,6000));try{const d=await api('vs',{id});if(d.url){w.url=d.url;w.t='Your video is ready.';draw();save();return}if(d.status==='failed'){w.t='⚠ Video failed.';draw();return}}catch{}}w.t='⚠ Video timed out.';draw()}
+async function send(){
+  const p=$('#in').value.trim();if(!p||busy)return;$('#in').value='';busy=1;beep(660);
+  const h=hist[sec],ah=h.filter(m=>m.t&&!m.img&&!m.url&&m.t[0]!=='⚠').map(m=>({role:m.r==='u'?'user':'model',parts:[{text:m.t}]}));
+  h.push({r:'u',t:p});recent.unshift({s:sec,p});recent=recent.slice(0,30);
+  const w={r:'m',t:'…'};h.push(w);draw();
+  try{const d=await api('ai',{uid,name,kind:sec,prompt:p,hist:ah});
+    if(d.error)w.t='⚠ '+d.error;else if(d.img){w.img=d.img;w.t='Image ready.'}else if(d.vid){w.t='Making your video… this takes 1-3 minutes.';pollV(w,d.vid)}else w.t=d.text}
+  catch{w.t='⚠ Network error. Check your connection.'}
+  busy=0;save();draw();beep(880)}
+function drawer(){$('#dr').innerHTML=`<button id="cl">Close</button><h4>Account</h4><p id="lg">${esc(name)} (guest) · tap to rename</p><h4>Recent</h4>${recent.map((r,i)=>`<p data-r="${i}">${esc(r.p.slice(0,60))}</p>`).join('')||'<p>Nothing yet</p>'}<h4>Saved</h4>${saved.map((r,i)=>`<p data-v="${i}">${esc(r.t.slice(0,60))}</p>`).join('')||'<p>Nothing saved</p>'}<h4>Admin</h4><p id="am">Open admin panel</p>`}
+$('#tb').onclick=e=>{const s=e.target.dataset.s;if(s)setSec(s)};
+$('#th').onclick=()=>{th={dark:'light',light:'dusk',dusk:'dark'}[th];document.documentElement.dataset.t=th;S('th',th);beep(600)};
+$('#sd').onclick=()=>{snd=snd?0:1;S('snd',snd);$('#sd').textContent=snd?'🔊':'🔇'};
+$('#dc').onclick=()=>open(cfg.discord||'https://discord.com');
+$('#mn').onclick=()=>{drawer();$('#dr').classList.add('o')};
+$('#dr').onclick=e=>{const t=e.target,d=t.dataset;
+  if(t.id==='cl')$('#dr').classList.remove('o');
+  else if(t.id==='lg'){const n=prompt('Your name',name);if(n){name=n.slice(0,30);S('name',name);drawer()}}
+  else if(d.r!==undefined){const r=recent[d.r];setSec(r.s);$('#in').value=r.p;$('#dr').classList.remove('o')}
+  else if(d.v!==undefined)alert(saved[d.v].t);
+  else if(t.id==='am'){const p=prompt('Admin password');if(p){sessionStorage.setItem('ap',p);location.href='/admin.html'}}};
+$('#msgs').onclick=e=>{const i=e.target.dataset.i;if(i!==undefined){saved.unshift({s:sec,t:hist[sec][i].t});S('saved',saved);e.target.textContent='★'}};
+$('#f').onsubmit=e=>{e.preventDefault();send()};
+document.documentElement.dataset.t=th;$('#sd').textContent=snd?'🔊':'🔇';setSec('chat');
+api('config').then(c=>{cfg=c||{};if(cfg.name)$('#nm').textContent=cfg.name;
+  const an=cfg.maintenance?'We are updating the app. Please try again soon.':cfg.announce;if(an){$('#an').textContent=an;$('#an').style.display='block'}
+  const ads=(cfg.ads||[]).filter(x=>x.on&&x.t);if(ads.length){const x=ads[Math.random()*ads.length|0],e=$('#ad');e.textContent='Ad · '+x.t;if(/^https?:/.test(x.l))e.href=x.l;e.style.display='block'}
+  tabs()}).catch(()=>{});
+</script></body></html>
